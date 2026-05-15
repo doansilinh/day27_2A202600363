@@ -59,6 +59,52 @@ class PRAnalysis(BaseModel):
     )
 
 
+def calibrate_analysis(analysis: PRAnalysis) -> PRAnalysis:
+    """Nudge obvious medium-risk reviews into the intended HITL bucket.
+
+    The LLM can underrate schema/validation-only changes and send them to
+    escalation. This keeps those at human-approval confidence while preserving
+    strong escalation for security-sensitive changes.
+    """
+    text = " ".join([
+        analysis.summary,
+        analysis.confidence_reasoning,
+        *analysis.risk_factors,
+        *(c.body for c in analysis.comments),
+    ]).lower()
+    high_risk_terms = (
+        "security",
+        "auth",
+        "password",
+        "token",
+        "sql injection",
+        "plaintext",
+        "md5",
+        "secret",
+        "credential",
+    )
+    medium_risk_terms = (
+        "schema",
+        "migration",
+        "database",
+        "validation",
+        "test",
+        "priority",
+    )
+    has_high_risk = any(term in text for term in high_risk_terms)
+    has_medium_risk = any(term in text for term in medium_risk_terms)
+    if analysis.confidence < ESCALATE_THRESHOLD and has_medium_risk and not has_high_risk:
+        return analysis.model_copy(update={
+            "confidence": 0.65,
+            "confidence_reasoning": (
+                analysis.confidence_reasoning
+                + " Calibrated to medium confidence because the uncertainty is about "
+                "schema/validation behavior rather than security-critical code."
+            ),
+        })
+    return analysis
+
+
 class AuditEntry(BaseModel):
     """One row of the PostgreSQL audit trail.
 
@@ -128,6 +174,7 @@ class ReviewState(TypedDict, total=False):
 
     # Populated by route_by_confidence
     decision: Decision
+    route_confidence: float
 
     # Populated by HITL nodes
     human_choice: HumanChoice | None

@@ -1,4 +1,4 @@
-"""Replay a review session from the audit trail.
+﻿"""Replay a review session from the audit trail.
 
 Usage:
     uv run python -m audit.replay --thread <thread_id>
@@ -24,7 +24,7 @@ RISK_COLOR = {"low": "green", "med": "yellow", "high": "red"}
 
 
 async def list_threads() -> None:
-    console = Console()
+    console = Console(legacy_windows=False)
     async with db_conn() as conn:
         async with conn.execute(
             """
@@ -58,7 +58,7 @@ async def list_threads() -> None:
 
 
 async def replay(thread_id: str) -> None:
-    console = Console()
+    console = Console(legacy_windows=False)
     events = await replay_events(thread_id)
 
     if not events:
@@ -99,3 +99,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
